@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Job Claim Check — See if you have a workplace claim</title>
+<meta name="description" content="Answer a few quick questions about what happened at work. Free, confidential, about 60 seconds.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+
+<!--
+  ============================================================================
+  CONFIG — the only things to edit before launch
+  ============================================================================
+  SUBMIT_ENDPOINT : GHL "Inbound Webhook" trigger URL (see ../ghl-setup.md)
+  META_PIXEL_ID   : from the aged/pixel BM once it arrives
+  TRUSTEDFORM     : leave true once a TrustedForm account exists; the script
+                    below records the consent certificate (incl. IP address),
+                    which is what makes each lead TCPA-defensible.
+
+  COMPLIANCE RULE (Dewei): keep sensitive-category wording out of anything Meta
+  can read — visible copy, <title>, meta tags, or event payloads. That's why
+  the copy says "something happened at work" and field keys are neutral.
+  ============================================================================
+-->
+<script>
+  window.JCC_CONFIG = {
+    SUBMIT_ENDPOINT: '',          // e.g. https://services.leadconnectorhq.com/hooks/XXXX/webhook-trigger/YYYY
+    META_PIXEL_ID: '',            // e.g. 1234567890
+    TRUSTEDFORM: true,
+    // Who the lead consents to be contacted by. Must name every party that will actually call them.
+    // Direct-to-firm model: 'one participating law firm'
+    // Aggregator model: name it, e.g. 'Walker Advertising and one participating law firm'
+    CONSENT_PARTIES: 'one participating law firm',
+    BRAND: 'Job Claim Check',
+    OPERATOR: 'Lwin Solutions Pro LLC'
+  };
+</script>
+
+<style>
+  :root{
+    --navy:#12233F; --navy-2:#1C3560; --ink:#16202E; --ink-2:#4A5566; --ink-3:#7B8595;
+    --paper:#F7F6F2; --surface:#FFFFFF; --rule:#E3E0D8;
+    --hiviz:#F5C400; --hiviz-deep:#D9A900; --ok:#1E7A4F;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,sans-serif;font-size:18px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button,input,select{font:inherit;color:inherit}
+  a{color:inherit}
+
+  /* hazard-stripe top edge: the one visual flourish, says "workplace" before a word is read */
+  .stripe{height:6px;background:repeating-linear-gradient(-45deg,var(--hiviz) 0 14px,var(--navy) 14px 28px)}
+
+  header{background:var(--navy);color:#fff}
+  header .in{max-width:40rem;margin:0 auto;padding:.9rem 1.1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+  .mark{display:flex;align-items:center;gap:.55rem;text-decoration:none}
+  .mark svg{width:30px;height:30px;flex:none}
+  .mark b{font-family:Archivo,sans-serif;font-weight:800;font-size:1.08rem;letter-spacing:-.01em}
+  .pill{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--hiviz);white-space:nowrap}
+
+  main{max-width:40rem;margin:0 auto;padding:1.4rem 1.1rem 2.5rem}
+
+  .hero h1{font-family:Archivo,sans-serif;font-weight:800;font-size:clamp(1.75rem,6.4vw,2.35rem);line-height:1.08;letter-spacing:-.022em;margin:.4rem 0 .6rem;text-wrap:balance}
+  .hero h1 span{background:linear-gradient(transparent 62%,var(--hiviz) 62%);padding:0 .08em}
+  .hero p{margin:0;color:var(--ink-2);font-size:1.02rem}
+  .checks{display:flex;flex-wrap:wrap;gap:.4rem .9rem;margin:.9rem 0 0;padding:0;list-style:none;font-size:.9rem;color:var(--ink-2)}
+  .checks li{display:flex;align-items:center;gap:.35rem}
+  .checks svg{width:16px;height:16px;color:var(--ok)}
+
+  .card{margin-top:1.3rem;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);box-shadow:0 18px 40px -30px rgba(18,35,63,.45);overflow:hidden}
+  .progress{height:5px;background:#EEEBE3}
+  .progress i{display:block;height:100%;width:0;background:var(--hiviz-deep);transition:width .35s ease}
+  .step{display:none;padding:1.35rem 1.2rem 1.4rem}
+  .step.on{display:block;animation:in .28s ease both}
+  @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .q{font-family:Archivo,sans-serif;font-weight:800;font-size:1.28rem;line-height:1.2;letter-spacing:-.01em;margin:0 0 .3rem}
+  .hint{margin:0 0 1rem;color:var(--ink-3);font-size:.92rem}
+
+  .opts{display:grid;gap:.6rem}
+  .opt{display:flex;align-items:center;justify-content:space-between;gap:.8rem;width:100%;text-align:left;padding:1rem 1.05rem;border:2px solid var(--rule);border-radius:12px;background:#fff;cursor:pointer;font-weight:700;font-size:1.02rem;min-height:58px;transition:border-color .15s,background .15s,transform .08s}
+  .opt:hover{border-color:var(--navy-2)}
+  .opt:active{transform:scale(.99)}
+  .opt.sel{border-color:var(--navy);background:#FFF9DB}
+  .opt svg{width:20px;height:20px;flex:none;color:var(--ink-3)}
+
+  label.f{display:block;font-weight:700;font-size:.9rem;margin:.85rem 0 .3rem}
+  .in-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+  input.t,select.t{width:100%;padding:.85rem .9rem;border:2px solid var(--rule);border-radius:10px;background:#fff;font-size:1.02rem;min-height:52px}
+  input.t:focus,select.t:focus{outline:none;border-color:var(--navy)}
+  .err{color:#B42318;font-size:.86rem;margin:.35rem 0 0;display:none}
+  .err.show{display:block}
+
+  .go{margin-top:1.1rem;width:100%;padding:1.05rem;border:0;border-radius:12px;background:var(--hiviz);color:var(--navy);font-family:Archivo,sans-serif;font-weight:800;font-size:1.1rem;cursor:pointer;min-height:58px;box-shadow:0 3px 0 var(--hiviz-deep)}
+  .go:active{transform:translateY(2px);box-shadow:0 1px 0 var(--hiviz-deep)}
+  .go[disabled]{opacity:.6;cursor:wait}
+  .back{margin-top:.8rem;background:none;border:0;color:var(--ink-3);font-size:.9rem;cursor:pointer;padding:.3rem 0;text-decoration:underline}
+
+  .consent{margin:.9rem 0 0;font-size:.74rem;line-height:1.45;color:var(--ink-3)}
+  .consent label{display:flex;gap:.55rem;align-items:flex-start;cursor:pointer}
+  .consent input{margin-top:.2rem;width:18px;height:18px;flex:none;accent-color:var(--navy)}
+
+  .done{text-align:center;padding:2rem 1.2rem}
+  .done .tick{width:56px;height:56px;margin:0 auto 1rem;border-radius:50%;background:#E4F3EB;display:grid;place-items:center}
+  .done .tick svg{width:28px;height:28px;color:var(--ok)}
+  .done h2{font-family:Archivo,sans-serif;font-weight:800;font-size:1.5rem;margin:0 0 .5rem}
+  .done p{color:var(--ink-2);margin:.4rem 0 0}
+
+  .how{margin-top:2rem}
+  .how h2{font-family:Archivo,sans-serif;font-weight:800;font-size:1.15rem;margin:0 0 .8rem}
+  .how ol{margin:0;padding:0;list-style:none;counter-reset:s;display:grid;gap:.75rem}
+  .how li{counter-increment:s;display:grid;grid-template-columns:34px 1fr;gap:.7rem;align-items:start;color:var(--ink-2);font-size:.97rem}
+  .how li::before{content:counter(s);width:34px;height:34px;border-radius:50%;background:var(--navy);color:var(--hiviz);display:grid;place-items:center;font-family:Archivo,sans-serif;font-weight:800}
+  .how b{color:var(--ink)}
+
+  footer{border-top:1px solid var(--rule);margin-top:2.4rem}
+  footer .in{max-width:40rem;margin:0 auto;padding:1.3rem 1.1rem 2.2rem;font-size:.76rem;line-height:1.55;color:var(--ink-3)}
+  footer nav{display:flex;gap:1rem;margin-bottom:.7rem;font-size:.82rem}
+  footer p{margin:.5rem 0 0}
+</style>
+</head>
+<body>
+<div class="stripe" aria-hidden="true"></div>
+<header><div class="in">
+  <a class="mark" href="#" aria-label="Job Claim Check">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#F5C400"/><path d="M9 16.5l4.5 4.5L23 11.5" fill="none" stroke="#12233F" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <b>Job Claim Check</b>
+  </a>
+  <span class="pill">Free · 60 seconds</span>
+</div></header>
+
+<main>
+  <section class="hero">
+    <h1>Something happen at work? <span>See where you stand.</span></h1>
+    <p>Answer a few quick questions. If your situation fits, a local attorney who handles these cases will reach out — free, with no obligation.</p>
+    <ul class="checks">
+      <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l3.5 3.5L16 6"/></svg>Free to check</li>
+      <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l3.5 3.5L16 6"/></svg>Confidential</li>
+      <li><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l3.5 3.5L16 6"/></svg>No obligation</li>
+    </ul>
+  </section>
+
+  <form class="card" id="quiz" novalidate>
+    <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+
+    <!-- 1: what happened (branches the quiz) -->
+    <div class="step on" data-step="kind">
+      <p class="q">What best describes what happened?</p>
+      <p class="hint">Pick the closest one.</p>
+      <div class="opts" data-name="kind">
+        <button type="button" class="opt" data-value="work_incident">Something happened while I was working <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5l5 5-5 5"/></svg></button>
+        <button type="button" class="opt" data-value="pay">I wasn't paid what I'm owed or overtime <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5l5 5-5 5"/></svg></button>
+        <button type="button" class="opt" data-value="fired">I was fired or let go unfairly <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5l5 5-5 5"/></svg></button>
+        <button type="button" class="opt" data-value="unfair">I was treated unfairly, harassed, or punished for speaking up <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5l5 5-5 5"/></svg></button>
+        <button type="button" class="opt" data-value="other">Something else at work <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5l5 5-5 5"/></svg></button>
+      </div>
+    </div>
+
+    <!-- 2: when -->
+    <div class="step" data-step="when">
+      <p class="q">When did it happen?</p>
+      <p class="hint">Deadlines apply to these cases, so timing matters.</p>
+      <div class="opts" data-name="when">
+        <button type="button" class="opt" data-value="0-1m">In the last month</button>
+        <button type="button" class="opt" data-value="1-12m">1 to 12 months ago</button>
+        <button type="button" class="opt" data-value="1-2y">1 to 2 years ago</button>
+        <button type="button" class="opt" data-value="2y+">More than 2 years ago</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+
+    <!-- 3: employment status (work_incident path only) -->
+    <div class="step" data-step="status">
+      <p class="q">How were you paid at that job?</p>
+      <div class="opts" data-name="status">
+        <button type="button" class="opt" data-value="employee">Regular paycheck (W-2 employee)</button>
+        <button type="button" class="opt" data-value="contractor">As a contractor (1099)</button>
+        <button type="button" class="opt" data-value="unsure">Not sure</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+
+    <!-- 4: missed work (work_incident) / still employed (employment) -->
+    <div class="step" data-step="missed">
+      <p class="q">Have you had to miss work because of it?</p>
+      <div class="opts" data-name="missed">
+        <button type="button" class="opt" data-value="yes">Yes</button>
+        <button type="button" class="opt" data-value="no">No</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+    <div class="step" data-step="still">
+      <p class="q">Do you still work there?</p>
+      <div class="opts" data-name="still">
+        <button type="button" class="opt" data-value="yes">Yes, I still work there</button>
+        <button type="button" class="opt" data-value="no">No, not anymore</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+
+    <!-- 5: represented -->
+    <div class="step" data-step="lawyer">
+      <p class="q">Do you already have a lawyer for this?</p>
+      <div class="opts" data-name="lawyer">
+        <button type="button" class="opt" data-value="no">No</button>
+        <button type="button" class="opt" data-value="yes">Yes</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+
+    <!-- 6: state -->
+    <div class="step" data-step="state">
+      <p class="q">What state did this happen in?</p>
+      <label class="f" for="st">State</label>
+      <select class="t" id="st" name="state" required>
+        <option value="">Choose your state</option>
+      </select>
+      <p class="err" id="st-err">Please choose a state.</p>
+      <button type="button" class="go" data-next>Continue</button>
+      <button type="button" class="back">Back</button>
+    </div>
+
+    <!-- 7: contact + consent -->
+    <div class="step" data-step="contact">
+      <p class="q">Last step — where should we reach you?</p>
+      <p class="hint">Only one attorney will contact you. We never sell your details to multiple firms.</p>
+      <div class="in-row">
+        <div><label class="f" for="fn">First name</label><input class="t" id="fn" name="first_name" autocomplete="given-name" required></div>
+        <div><label class="f" for="ln">Last name</label><input class="t" id="ln" name="last_name" autocomplete="family-name" required></div>
+      </div>
+      <label class="f" for="ph">Mobile phone</label>
+      <input class="t" id="ph" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(555) 555-5555" required>
+      <label class="f" for="em">Email</label>
+      <input class="t" id="em" name="email" type="email" inputmode="email" autocomplete="email" required>
+      <p class="err" id="c-err">Please fill in every field with a valid phone and email.</p>
+
+      <div class="consent">
+        <label><input type="checkbox" id="tcpa" name="tcpa_consent" value="yes">
+          <span id="tcpa-text">By checking this box and clicking "See my options," I agree that Job Claim Check (operated by Lwin Solutions Pro LLC) and <span id="tcpa-parties">one participating law firm</span> may contact me at the number and email I provided about my inquiry, including by calls and text messages that may use automated technology or prerecorded voice. Consent is not a condition of any purchase or service. Message and data rates may apply; message frequency varies. Reply STOP to opt out or HELP for help.</span>
+        </label>
+      </div>
+      <p class="err" id="tcpa-err">Please check the box so an attorney can reach you.</p>
+
+      <button type="submit" class="go" id="submit">See my options</button>
+      <button type="button" class="back">Back</button>
+    </div>
+
+    <!-- done -->
+    <div class="step done" data-step="done">
+      <div class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2>Thanks — you're all set.</h2>
+      <p>If your situation fits, an attorney who handles these cases will reach out shortly, usually by phone. Keep your phone nearby.</p>
+      <p>There's no cost to talk with them and no obligation.</p>
+    </div>
+
+    <!-- hidden: everything a buyer and a TCPA audit needs -->
+    <input type="hidden" name="xxTrustedFormCertUrl" id="xxTrustedFormCertUrl">
+  </form>
+
+  <section class="how">
+    <h2>How it works</h2>
+    <ol>
+      <li><span><b>Answer a few questions.</b> About a minute, on your phone.</span></li>
+      <li><span><b>We check it against what local firms handle.</b> Not every situation is a fit — we'll only pass yours on if it is.</span></li>
+      <li><span><b>One attorney reaches out.</b> Not a crowd of them. The conversation is free and you decide what happens next.</span></li>
+    </ol>
+  </section>
+</main>
+
+<footer><div class="in">
+  <nav><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms</a></nav>
+  <p><b>Job Claim Check is not a law firm and does not provide legal advice.</b> It is a free service operated by Lwin Solutions Pro LLC that connects people with independent attorneys who pay to advertise here. Submitting this form does not create an attorney-client relationship. No outcome is promised; every situation is different.</p>
+  <p>Attorney advertising. Lwin Solutions Pro LLC · 2710 NW 115th Terrace, Coral Springs, FL 33065</p>
+</div></footer>
+
+<script>
+(function () {
+  var C = window.JCC_CONFIG;
+  var form = document.getElementById('quiz');
+  var steps = Array.prototype.slice.call(form.querySelectorAll('.step'));
+  var bar = document.getElementById('bar');
+  var answers = {};
+  var history = [];
+
+  var STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','District of Columbia','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
+  var sel = document.getElementById('st');
+  STATES.forEach(function (s) { var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+  document.getElementById('tcpa-parties').textContent = C.CONSENT_PARTIES;
+
+  // The two branches share steps but differ in the middle.
+  function route() {
+    var r = ['kind', 'when'];
+    if (answers.kind === 'work_incident') r.push('status', 'missed');
+    else if (answers.kind === 'pay' || answers.kind === 'fired' || answers.kind === 'unfair') r.push('still');
+    r.push('lawyer', 'state', 'contact');
+    return r;
+  }
+
+  function show(name) {
+    steps.forEach(function (s) { s.classList.toggle('on', s.dataset.step === name); });
+    var r = route();
+    var i = r.indexOf(name);
+    bar.style.width = (name === 'done' ? 100 : Math.round(((i + 1) / (r.length + 1)) * 100)) + '%';
+    window.scrollTo({ top: form.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
+  }
+
+  function next(from) {
+    var r = route();
+    var i = r.indexOf(from);
+    history.push(from);
+    show(r[i + 1]);
+  }
+
+  // Option buttons: record the answer and advance.
+  form.addEventListener('click', function (e) {
+    var opt = e.target.closest('.opt');
+    if (opt) {
+      var group = opt.parentElement;
+      group.querySelectorAll('.opt').forEach(function (b) { b.classList.remove('sel'); });
+      opt.classList.add('sel');
+      answers[group.dataset.name] = opt.dataset.value;
+      track('quiz_' + group.dataset.name);
+      setTimeout(function () { next(opt.closest('.step').dataset.step); }, 160);
+      return;
+    }
+    if (e.target.classList.contains('back')) {
+      var prev = history.pop();
+      if (prev) show(prev);
+      return;
+    }
+    if (e.target.hasAttribute('data-next')) {
+      if (!sel.value) { document.getElementById('st-err').classList.add('show'); return; }
+      document.getElementById('st-err').classList.remove('show');
+      answers.state = sel.value;
+      next('state');
+    }
+  });
+
+  // Qualification is tagged, never used to block: Dewei's rule is to capture disqualified
+  // leads too. Buyers only receive rows where qualified === "yes".
+  function qualify() {
+    var reasons = [];
+    if (answers.lawyer === 'yes') reasons.push('already_represented');
+    if (answers.when === '2y+') reasons.push('outside_time_window');
+    if (answers.kind === 'work_incident' && answers.status === 'contractor') reasons.push('contractor');
+    if (answers.kind === 'other') reasons.push('needs_review');
+    return { qualified: reasons.length ? 'no' : 'yes', reasons: reasons.join(',') };
+  }
+
+  function caseType() {
+    return answers.kind === 'work_incident' ? 'workers_comp'
+      : (answers.kind === 'other' ? 'other' : 'employment');
+  }
+
+  function params() {
+    var p = new URLSearchParams(location.search), o = {};
+    ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','fbclid','ad_id','adset_id','campaign_id'].forEach(function (k) {
+      if (p.get(k)) o[k] = p.get(k);
+    });
+    return o;
+  }
+
+  function validPhone(v) { return v.replace(/\D/g, '').replace(/^1/, '').length === 10; }
+  function validEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var fn = form.first_name.value.trim(), ln = form.last_name.value.trim();
+    var ph = form.phone.value.trim(), em = form.email.value.trim();
+    var ok = fn && ln && validPhone(ph) && validEmail(em);
+    document.getElementById('c-err').classList.toggle('show', !ok);
+    var consent = document.getElementById('tcpa').checked;
+    document.getElementById('tcpa-err').classList.toggle('show', !consent);
+    if (!ok || !consent) return;
+
+    var btn = document.getElementById('submit');
+    btn.disabled = true; btn.textContent = 'Sending…';
+
+    var q = qualify();
+    var payload = Object.assign({
+      first_name: fn, last_name: ln, phone: ph, email: em,
+      state: answers.state,
+      case_type: caseType(),
+      situation: answers.kind,
+      when_it_happened: answers.when,
+      pay_status: answers.status || '',
+      missed_work: answers.missed || '',
+      still_employed: answers.still || '',
+      has_lawyer: answers.lawyer,
+      qualified: q.qualified,
+      dq_reasons: q.reasons,
+      tcpa_consent: 'yes',
+      tcpa_consent_text: document.getElementById('tcpa-text').textContent.replace(/\s+/g, ' ').trim(),
+      trustedform_cert_url: document.getElementById('xxTrustedFormCertUrl').value || '',
+      landing_page: /^https?:$/.test(location.protocol) ? location.origin + location.pathname : '',
+      submitted_at: new Date().toISOString(),
+      user_agent: navigator.userAgent,
+      source_brand: C.BRAND
+    }, params());
+
+    send(payload).then(function () {
+      // Deliberately generic event name and no answer data: no quiz answers reach Meta.
+      track('Lead', true);
+      history = [];
+      show('done');
+    });
+  });
+
+  function send(data) {
+    if (!C.SUBMIT_ENDPOINT) {
+      console.warn('[JCC] SUBMIT_ENDPOINT not set — lead not sent', data);
+      return Promise.resolve();
+    }
+    return fetch(C.SUBMIT_ENDPOINT, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    }).catch(function () {
+      // If the endpoint rejects the CORS preflight, fall back to a simple form post the browser allows.
+      var body = new URLSearchParams();
+      Object.keys(data).forEach(function (k) { body.append(k, data[k]); });
+      return fetch(C.SUBMIT_ENDPOINT, { method: 'POST', mode: 'no-cors', body: body });
+    }).catch(function () {});
+  }
+
+  function track(name, standard) {
+    if (!window.fbq) return;
+    if (standard) fbq('track', name); else fbq('trackCustom', name);
+  }
+
+  // Meta pixel (only when configured)
+  if (C.META_PIXEL_ID) {
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', C.META_PIXEL_ID); fbq('track', 'PageView');
+  }
+
+  // TrustedForm certificate (records consent, page, timestamp and IP for TCPA defense)
+  if (C.TRUSTEDFORM) {
+    var tf = document.createElement('script');
+    tf.async = true;
+    tf.src = 'https://api.trustedform.com/trustedform.js?field=xxTrustedFormCertUrl&use_tagged_consent=true&l=' + new Date().getTime() + Math.random();
+    document.body.appendChild(tf);
+  }
+})();
+</script>
+</body>
+</html>
