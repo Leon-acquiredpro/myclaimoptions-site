@@ -30,11 +30,11 @@
     SUBMIT_ENDPOINT: '',          // e.g. https://services.leadconnectorhq.com/hooks/XXXX/webhook-trigger/YYYY
     META_PIXEL_ID: '',            // e.g. 1234567890
     TRUSTEDFORM: true,
-    // Who the lead consents to be contacted by. Must name every party that will actually call them.
-    // Direct-to-firm model: 'one participating law firm'
-    // Aggregator model: name it, e.g. 'Walker Advertising and one participating law firm'
-    // If you change this, update the matching sentences in privacy.html and terms.html too.
-    CONSENT_PARTIES: 'one participating law firm',
+    // Who the lead consents to be contacted by. Dewei's model: link the consent to a Marketing
+    // Partners page (partners.html) so competitors can't see who the buyers are.
+    // EVERY firm or aggregator that actually buys a lead must be on partners.html, or its calls
+    // aren't covered by the consent. If you change this, update privacy.html and terms.html too.
+    CONSENT_PARTIES: 'one of its <a href="partners.html" target="_blank" rel="noopener">marketing partners</a>',
     BRAND: 'Job Claim Check',
     OPERATOR: 'Lwin Solutions Pro LLC'
   };
@@ -326,7 +326,7 @@
 </main>
 
 <footer><div class="in">
-  <nav><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms</a></nav>
+  <nav><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms</a><a href="partners.html">Marketing Partners</a></nav>
   <p><b>Job Claim Check is not a law firm and does not provide legal advice.</b> It is a free service operated by Lwin Solutions Pro LLC that connects people with independent attorneys who pay to advertise here. Submitting this form does not create an attorney-client relationship. No outcome is promised; every situation is different.</p>
   <p>Attorney advertising. Lwin Solutions Pro LLC · 2710 NW 115th Terrace, Coral Springs, FL 33065</p>
 </div></footer>
@@ -343,7 +343,7 @@
   var STATES = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','District of Columbia','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'];
   var sel = document.getElementById('st');
   STATES.forEach(function (s) { var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
-  document.getElementById('tcpa-parties').textContent = C.CONSENT_PARTIES;
+  document.getElementById('tcpa-parties').innerHTML = C.CONSENT_PARTIES;
 
   // The two branches share steps but differ in the middle.
   function route() {
