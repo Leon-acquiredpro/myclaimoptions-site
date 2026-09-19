@@ -90,8 +90,10 @@
 
   label.f{display:block;font-weight:700;font-size:.9rem;margin:.85rem 0 .3rem}
   .in-row{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
-  input.t,select.t{width:100%;padding:.85rem .9rem;border:2px solid var(--rule);border-radius:10px;background:#fff;font-size:1.02rem;min-height:52px}
-  input.t:focus,select.t:focus{outline:none;border-color:var(--navy)}
+  input.t,select.t,textarea.t{width:100%;padding:.85rem .9rem;border:2px solid var(--rule);border-radius:10px;background:#fff;font-size:1.02rem;min-height:52px}
+  textarea.t{font:inherit;resize:vertical;margin-bottom:.4rem}
+  input.t:focus,select.t:focus,textarea.t:focus{outline:none;border-color:var(--navy)}
+  .done a{color:var(--navy);font-weight:600}
   .err{color:#B42318;font-size:.86rem;margin:.35rem 0 0;display:none}
   .err.show{display:block}
 
@@ -184,6 +186,40 @@
       <button type="button" class="back">Back</button>
     </div>
 
+    <!-- federal job (work_incident only). Federal workers fall under a separate federal
+         program, not state workers' comp — compclaimcounsel.com disqualifies on this too. -->
+    <div class="step" data-step="federal">
+      <p class="q">Was this while working for the federal government or the U.S. Postal Service?</p>
+      <div class="opts" data-name="federal">
+        <button type="button" class="opt" data-value="no">No</button>
+        <button type="button" class="opt" data-value="yes">Yes</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+
+    <!-- employer type + size (employment path only) — same questions justiceguys.com asks -->
+    <div class="step" data-step="employer">
+      <p class="q">What kind of employer was it?</p>
+      <div class="opts" data-name="employer">
+        <button type="button" class="opt" data-value="private">A private company or business</button>
+        <button type="button" class="opt" data-value="government">A government agency</button>
+        <button type="button" class="opt" data-value="union">A union job</button>
+        <button type="button" class="opt" data-value="other">Other</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+    <div class="step" data-step="size">
+      <p class="q">About how many people work for the company, counting all locations?</p>
+      <div class="opts" data-name="size">
+        <button type="button" class="opt" data-value="1-10">1 to 10</button>
+        <button type="button" class="opt" data-value="11-50">11 to 50</button>
+        <button type="button" class="opt" data-value="51-500">51 to 500</button>
+        <button type="button" class="opt" data-value="500+">More than 500</button>
+        <button type="button" class="opt" data-value="unsure">Not sure</button>
+      </div>
+      <button type="button" class="back">Back</button>
+    </div>
+
     <!-- 4: missed work (work_incident) / still employed (employment) -->
     <div class="step" data-step="missed">
       <p class="q">Have you had to miss work because of it?</p>
@@ -224,6 +260,16 @@
       <button type="button" class="back">Back</button>
     </div>
 
+    <!-- short description (optional). Goes to the CRM only — never to the pixel. -->
+    <div class="step" data-step="story">
+      <p class="q">In a sentence or two, what happened?</p>
+      <p class="hint">Optional, but it helps the attorney understand your situation before they call.</p>
+      <label class="f" for="sy">What happened</label>
+      <textarea class="t" id="sy" name="description" rows="4" maxlength="600"></textarea>
+      <button type="button" class="go" data-next>Continue</button>
+      <button type="button" class="back">Back</button>
+    </div>
+
     <!-- 7: contact + consent -->
     <div class="step" data-step="contact">
       <p class="q">Last step — where should we reach you?</p>
@@ -255,6 +301,14 @@
       <h2>Thanks — you're all set.</h2>
       <p>If your situation fits, an attorney who handles these cases will reach out shortly, usually by phone. Keep your phone nearby.</p>
       <p>There's no cost to talk with them and no obligation.</p>
+    </div>
+
+    <!-- shown instead of "done" when the answers disqualify. The lead has still been sent. -->
+    <div class="step done nofit" data-step="nofit">
+      <h2>Thanks for checking.</h2>
+      <p>Based on your answers, the attorneys we work with aren't able to take this one on.</p>
+      <p id="nofit-why"></p>
+      <p>If you picked something by mistake, you can <a href="" id="restart">start over</a>.</p>
     </div>
 
     <!-- hidden: everything a buyer and a TCPA audit needs -->
@@ -294,9 +348,9 @@
   // The two branches share steps but differ in the middle.
   function route() {
     var r = ['kind', 'when'];
-    if (answers.kind === 'work_incident') r.push('status', 'missed');
-    else if (answers.kind === 'pay' || answers.kind === 'fired' || answers.kind === 'unfair') r.push('still');
-    r.push('lawyer', 'state', 'contact');
+    if (answers.kind === 'work_incident') r.push('status', 'federal', 'missed');
+    else if (answers.kind === 'pay' || answers.kind === 'fired' || answers.kind === 'unfair') r.push('employer', 'size', 'still');
+    r.push('lawyer', 'state', 'story', 'contact');
     return r;
   }
 
@@ -304,7 +358,7 @@
     steps.forEach(function (s) { s.classList.toggle('on', s.dataset.step === name); });
     var r = route();
     var i = r.indexOf(name);
-    bar.style.width = (name === 'done' ? 100 : Math.round(((i + 1) / (r.length + 1)) * 100)) + '%';
+    bar.style.width = (name === 'done' || name === 'nofit' ? 100 : Math.round(((i + 1) / (r.length + 1)) * 100)) + '%';
     window.scrollTo({ top: form.getBoundingClientRect().top + window.scrollY - 12, behavior: 'smooth' });
   }
 
@@ -333,23 +387,48 @@
       return;
     }
     if (e.target.hasAttribute('data-next')) {
-      if (!sel.value) { document.getElementById('st-err').classList.add('show'); return; }
-      document.getElementById('st-err').classList.remove('show');
-      answers.state = sel.value;
-      next('state');
+      var from = e.target.closest('.step').dataset.step;
+      if (from === 'state') {
+        if (!sel.value) { document.getElementById('st-err').classList.add('show'); return; }
+        document.getElementById('st-err').classList.remove('show');
+        answers.state = sel.value;
+      }
+      next(from);
     }
   });
 
   // Qualification is tagged, never used to block: Dewei's rule is to capture disqualified
-  // leads too. Buyers only receive rows where qualified === "yes".
+  // leads too. Buyers only receive rows where qualified === "yes". Like compclaimcounsel.com,
+  // the "not a fit" message only appears after the lead is sent.
+  // Hard disqualifiers mirror Dewei's example funnels (Sept 2026):
+  //   compclaimcounsel.com: not hurt at work, 2+ years ago, federal/USPS job, already has a lawyer
+  //   justiceguys.com: not private-sector ("private companies" only)
+  // Flags don't disqualify — the buyer decides (e.g. some state laws only cover larger employers).
   function qualify() {
-    var reasons = [];
+    var reasons = [], flags = [];
     if (answers.lawyer === 'yes') reasons.push('already_represented');
     if (answers.when === '2y+') reasons.push('outside_time_window');
     if (answers.kind === 'work_incident' && answers.status === 'contractor') reasons.push('contractor');
+    if (answers.federal === 'yes') reasons.push('federal_employee');
+    if (answers.employer === 'government') reasons.push('government_employer');
+    if (answers.employer === 'union') reasons.push('union_job');
     if (answers.kind === 'other') reasons.push('needs_review');
-    return { qualified: reasons.length ? 'no' : 'yes', reasons: reasons.join(',') };
+    if (answers.size === '1-10') flags.push('small_employer');
+    if (answers.employer === 'other') flags.push('employer_type_other');
+    if (answers.status === 'unsure') flags.push('pay_type_unsure');
+    return { qualified: reasons.length ? 'no' : 'yes', reasons: reasons.join(','), flags: flags.join(',') };
   }
+
+  // Plain-language line for the "not a fit" screen. Only the first reason is shown.
+  var WHY = {
+    already_represented: "Since you already have a lawyer, it's best to keep working with them.",
+    outside_time_window: 'Most of these cases have to be started within a set time, and this one may be past it.',
+    contractor: 'Contractor (1099) work is usually handled differently from regular employment.',
+    federal_employee: 'Federal and Postal Service jobs go through a separate federal program.',
+    government_employer: 'Right now we only help people who worked for private companies.',
+    union_job: 'Union jobs usually go through the union first.',
+    needs_review: ''
+  };
 
   function caseType() {
     return answers.kind === 'work_incident' ? 'workers_comp'
@@ -390,9 +469,14 @@
       pay_status: answers.status || '',
       missed_work: answers.missed || '',
       still_employed: answers.still || '',
+      federal_job: answers.federal || '',
+      employer_type: answers.employer || '',
+      employer_size: answers.size || '',
       has_lawyer: answers.lawyer,
+      description: form.description.value.trim(),
       qualified: q.qualified,
       dq_reasons: q.reasons,
+      review_flags: q.flags,
       tcpa_consent: 'yes',
       tcpa_consent_text: document.getElementById('tcpa-text').textContent.replace(/\s+/g, ' ').trim(),
       trustedform_cert_url: document.getElementById('xxTrustedFormCertUrl').value || '',
@@ -406,8 +490,15 @@
       // Deliberately generic event name and no answer data: no quiz answers reach Meta.
       track('Lead', true);
       history = [];
-      show('done');
+      if (q.qualified === 'yes') { show('done'); return; }
+      document.getElementById('nofit-why').textContent = WHY[q.reasons.split(',')[0]] || '';
+      show('nofit');
     });
+  });
+
+  document.getElementById('restart').addEventListener('click', function (e) {
+    e.preventDefault();
+    location.reload();
   });
 
   function send(data) {
