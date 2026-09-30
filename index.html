@@ -461,6 +461,29 @@
     btn.disabled = true; btn.textContent = 'Sending…';
 
     var q = qualify();
+    var p = params();
+    var quizAnswers = [
+      ['What happened', answers.kind],
+      ['When it happened', answers.when],
+      ['Pay status', answers.status],
+      ['Missed work', answers.missed],
+      ['Still employed', answers.still],
+      ['Federal or postal job', answers.federal],
+      ['Employer type', answers.employer],
+      ['Employer size', answers.size],
+      ['Already has a lawyer', answers.lawyer],
+      ['State', answers.state],
+      ['In their words', form.description.value.trim()],
+      ['Disqualify reasons', q.reasons],
+      ['Review flags', q.flags],
+      ['Submitted at', new Date().toISOString()],
+      ['Landing page', /^https?:$/.test(location.protocol) ? location.origin + location.pathname : ''],
+      ['UTM campaign', p.utm_campaign || ''],
+      ['UTM content', p.utm_content || ''],
+      ['Ad id', p.ad_id || '']
+    ].filter(function (r) { return r[1]; }).map(function (r) { return r[0] + ': ' + r[1]; }).join('\n');
+
+
     var payload = Object.assign({
       first_name: fn, last_name: ln, phone: ph, email: em,
       state: answers.state,
@@ -484,8 +507,9 @@
       landing_page: /^https?:$/.test(location.protocol) ? location.origin + location.pathname : '',
       submitted_at: new Date().toISOString(),
       user_agent: navigator.userAgent,
+      quiz_answers: quizAnswers,
       source_brand: C.BRAND
-    }, params());
+    }, p);
 
     send(payload).then(function () {
       // Deliberately generic event name and no answer data: no quiz answers reach Meta.
