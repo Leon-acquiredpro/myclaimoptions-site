@@ -28,7 +28,7 @@
 -->
 <script>
   window.JCC_CONFIG = {
-    SUBMIT_ENDPOINT: '',          // e.g. https://services.leadconnectorhq.com/hooks/XXXX/webhook-trigger/YYYY
+    SUBMIT_ENDPOINT: 'https://services.leadconnectorhq.com/hooks/wnPagD6dmlIWslwqzQUt/webhook-trigger/e0f76b2e-9d62-49b3-b2e2-a482be58f897',
     META_PIXEL_ID: '',            // e.g. 1234567890
     TRUSTEDFORM: true,
     // Who the lead consents to be contacted by. Dewei's model: link the consent to a Marketing
@@ -528,7 +528,7 @@
 
   function send(data) {
     if (!C.SUBMIT_ENDPOINT) {
-      console.warn('[JCC] SUBMIT_ENDPOINT not set — lead not sent', data);
+      console.warn('[MCO] SUBMIT_ENDPOINT not set — lead not sent', data);
       return Promise.resolve();
     }
     return fetch(C.SUBMIT_ENDPOINT, {
